@@ -2,24 +2,28 @@ import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-export default async function handler(req, res) {
+export const config = {
+  runtime: "edge",
+};
+
+export default async function handler(req) {
   // Set CORS headers
-  res.setHeader("Access-Control-Allow-Credentials", true);
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version"
-  );
+  const headers = {
+    "Access-Control-Allow-Credentials": "true",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Headers":
+      "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version",
+  };
 
   // Handle OPTIONS request
   if (req.method === "OPTIONS") {
-    return res.status(200).end();
+    return new Response(null, { status: 200, headers });
   }
 
-  // Handle POST request
   if (req.method === "POST") {
     try {
+      const body = await req.json();
       const {
         fullName,
         phoneNumber,
@@ -29,7 +33,7 @@ export default async function handler(req, res) {
         contactMethod,
         message,
         mailingList,
-      } = req.body;
+      } = body;
 
       const { data, error } = await resend.emails.send({
         from: `${fullName} <onboarding@resend.dev>`,
@@ -44,25 +48,30 @@ export default async function handler(req, res) {
           <p><strong>Discussion Topic:</strong> ${discussionTopic}</p>
           <p><strong>Preferred Contact Method:</strong> ${contactMethod}</p>
           <p><strong>Message:</strong> ${message}</p>
-          <p><strong>Join Mailing List:</strong> ${
-            mailingList ? "Yes" : "No"
-          }</p>
         `,
       });
 
       if (error) {
-        console.error("Resend API Error:", error);
-        return res.status(400).json({ error: error.message });
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 400,
+          headers,
+        });
       }
 
-      console.log("Email sent successfully:", data);
-      return res.status(200).json({ message: "Email sent successfully", data });
+      return new Response(
+        JSON.stringify({ message: "Email sent successfully", data }),
+        { status: 200, headers }
+      );
     } catch (error) {
-      console.error("Unexpected error in API route:", error);
-      return res.status(500).json({ error: "An unexpected error occurred" });
+      return new Response(
+        JSON.stringify({ error: "An unexpected error occurred" }),
+        { status: 500, headers }
+      );
     }
   }
 
-  // Handle unsupported methods
-  return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
+  return new Response(
+    JSON.stringify({ error: `Method ${req.method} Not Allowed` }),
+    { status: 405, headers }
+  );
 }
